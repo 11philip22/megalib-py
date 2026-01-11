@@ -3,6 +3,15 @@ use pyo3::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// A file or folder node in MEGA.
+///
+/// Attributes:
+///     name: File/folder name
+///     handle: Unique MEGA handle
+///     size: Size in bytes (0 for folders)
+///     timestamp: Unix timestamp of last modification
+///     is_file: True if this is a file
+///     is_folder: True if this is a folder
 #[pyclass]
 #[derive(Clone)]
 struct MegaNode {
@@ -33,6 +42,9 @@ impl From<&Node> for MegaNode {
     }
 }
 
+/// Registration state for two-step account creation.
+///
+/// Use `serialize()` to save state, `deserialize()` to restore it.
 #[pyclass]
 struct MegaRegistrationState {
     inner: RegistrationState,
@@ -40,10 +52,12 @@ struct MegaRegistrationState {
 
 #[pymethods]
 impl MegaRegistrationState {
+    /// Serialize state to JSON string for storage.
     fn serialize(&self) -> String {
         self.inner.serialize()
     }
 
+    /// Restore state from a JSON string.
     #[staticmethod]
     fn deserialize(s: String) -> PyResult<Self> {
         let state = RegistrationState::deserialize(&s)
@@ -52,6 +66,12 @@ impl MegaRegistrationState {
     }
 }
 
+/// Information about a public file link.
+///
+/// Attributes:
+///     name: File name
+///     size: Size in bytes
+///     handle: MEGA handle
 #[pyclass]
 struct MegaPublicFile {
     #[pyo3(get)]
@@ -62,6 +82,15 @@ struct MegaPublicFile {
     handle: String,
 }
 
+/// Authenticated MEGA session for file operations.
+///
+/// Create a session using `login()` or `load()`, then call `refresh()` to
+/// fetch your file tree before performing operations.
+///
+/// Example:
+///     session = await MegaSession.login("user@example.com", "password")
+///     await session.refresh()
+///     files = await session.list("/")
 #[pyclass]
 struct MegaSession {
     inner: Arc<Mutex<Session>>,
@@ -69,6 +98,18 @@ struct MegaSession {
 
 #[pymethods]
 impl MegaSession {
+    /// Login to MEGA with email and password.
+    ///
+    /// Args:
+    ///     email: Your MEGA account email
+    ///     password: Your MEGA account password
+    ///     proxy: Optional HTTP/SOCKS5 proxy URL (e.g., "http://proxy:8080")
+    ///
+    /// Returns:
+    ///     Authenticated MegaSession
+    ///
+    /// Raises:
+    ///     ValueError: If login fails (wrong credentials, etc.)
     #[staticmethod]
     fn login(
         py: Python<'_>,
@@ -91,6 +132,9 @@ impl MegaSession {
         })
     }
 
+    /// Refresh the file tree from the server.
+    ///
+    /// Must be called after login before using list(), stat(), etc.
     fn refresh<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -103,6 +147,13 @@ impl MegaSession {
         })
     }
 
+    /// Get information about a file or folder.
+    ///
+    /// Args:
+    ///     path: Path to the file/folder (e.g., "/Root/Documents")
+    ///
+    /// Returns:
+    ///     MegaNode if found, None otherwise
     fn stat<'p>(&self, py: Python<'p>, path: String) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -114,6 +165,14 @@ impl MegaSession {
         })
     }
 
+    /// List files in a directory.
+    ///
+    /// Args:
+    ///     path: Path to list (e.g., "/", "/Root/Documents")
+    ///     recursive: If True, list all descendants recursively
+    ///
+    /// Returns:
+    ///     List of MegaNode objects
     #[pyo3(signature = (path, recursive = false))]
     fn list<'p>(&self, py: Python<'p>, path: String, recursive: bool) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
@@ -127,6 +186,10 @@ impl MegaSession {
         })
     }
 
+    /// Get storage quota information.
+    ///
+    /// Returns:
+    ///     Tuple of (total_bytes, used_bytes)
     fn quota<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -140,6 +203,10 @@ impl MegaSession {
         })
     }
 
+    /// Create a new directory.
+    ///
+    /// Args:
+    ///     path: Full path for the new directory (e.g., "/Root/NewFolder")
     fn mkdir<'p>(&self, py: Python<'p>, path: String) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -152,6 +219,11 @@ impl MegaSession {
         })
     }
 
+    /// Rename a file or folder.
+    ///
+    /// Args:
+    ///     path: Path to the item to rename
+    ///     new_name: New name (not a path, just the filename)
     fn rename<'p>(&self, py: Python<'p>, path: String, new_name: String) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -164,6 +236,11 @@ impl MegaSession {
         })
     }
 
+    /// Move a file or folder to a new location.
+    ///
+    /// Args:
+    ///     source: Path to the item to move
+    ///     dest: Path to the destination folder
     fn mv<'p>(&self, py: Python<'p>, source: String, dest: String) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -176,6 +253,10 @@ impl MegaSession {
         })
     }
 
+    /// Delete a file or folder.
+    ///
+    /// Args:
+    ///     path: Path to the item to delete
     fn rm<'p>(&self, py: Python<'p>, path: String) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -188,6 +269,13 @@ impl MegaSession {
         })
     }
 
+    /// Create a public download link for a file.
+    ///
+    /// Args:
+    ///     path: Path to the file to export
+    ///
+    /// Returns:
+    ///     Public URL string
     fn export<'p>(&self, py: Python<'p>, path: String) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -200,6 +288,11 @@ impl MegaSession {
         })
     }
 
+    /// Upload a file to MEGA.
+    ///
+    /// Args:
+    ///     local_path: Path to local file
+    ///     remote_path: Destination folder on MEGA
     fn upload<'p>(
         &self,
         _py: Python<'p>,
@@ -217,6 +310,11 @@ impl MegaSession {
         })
     }
 
+    /// Download a file from MEGA.
+    ///
+    /// Args:
+    ///     remote_path: Path to file on MEGA
+    ///     local_path: Destination path on local disk
     fn download<'p>(
         &self,
         _py: Python<'p>,
@@ -245,6 +343,10 @@ impl MegaSession {
         })
     }
 
+    /// Get the user's email address.
+    ///
+    /// Returns:
+    ///     User's email address as a string
     fn get_email<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -253,6 +355,10 @@ impl MegaSession {
         })
     }
 
+    /// Get the user's display name.
+    ///
+    /// Returns:
+    ///     User's display name as a string
     fn get_name<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -261,6 +367,10 @@ impl MegaSession {
         })
     }
 
+    /// Get the user's MEGA handle (unique ID).
+    ///
+    /// Returns:
+    ///     User's MEGA handle as a string
     fn get_handle<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -269,6 +379,12 @@ impl MegaSession {
         })
     }
 
+    /// Set number of parallel transfer workers.
+    ///
+    /// Higher values speed up large file transfers.
+    ///
+    /// Args:
+    ///     workers: Number of parallel transfer workers
     fn set_workers<'p>(&self, py: Python<'p>, workers: usize) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -278,6 +394,10 @@ impl MegaSession {
         })
     }
 
+    /// Enable/disable resume for interrupted downloads.
+    ///
+    /// Args:
+    ///     enabled: True to enable, False to disable
     fn set_resume<'p>(&self, py: Python<'p>, enabled: bool) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -287,6 +407,10 @@ impl MegaSession {
         })
     }
 
+    /// Enable/disable thumbnail generation on upload.
+    ///
+    /// Args:
+    ///     enabled: True to enable, False to disable
     fn enable_previews<'p>(&self, py: Python<'p>, enabled: bool) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -296,6 +420,12 @@ impl MegaSession {
         })
     }
 
+    /// Share a folder with another user.
+    ///
+    /// Args:
+    ///     path: Path to folder to share
+    ///     email: Email of user to share with
+    ///     access_level: 0=read, 1=write, 2=full
     fn share_folder<'p>(
         &self,
         py: Python<'p>,
@@ -314,6 +444,10 @@ impl MegaSession {
         })
     }
 
+    /// List all contacts (users you've shared with).
+    ///
+    /// Returns:
+    ///     List of MegaNode objects representing contacts
     fn list_contacts<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -324,6 +458,12 @@ impl MegaSession {
         })
     }
 
+    /// Save session to file for later restoration.
+    ///
+    /// The saved file contains encrypted credentials - keep it secure!
+    ///
+    /// Args:
+    ///     path: Path to save session file
     fn save<'p>(&self, py: Python<'p>, path: String) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -335,6 +475,10 @@ impl MegaSession {
         })
     }
 
+    /// Change the user's password.
+    ///
+    /// Args:
+    ///     new_password: New password for the account
     fn change_password<'p>(&self, py: Python<'p>, new_password: String) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -347,6 +491,11 @@ impl MegaSession {
         })
     }
 
+    /// Download a file to a specific file path.
+    ///
+    /// Args:
+    ///     remote_path: Path to file on MEGA
+    ///     local_path: Destination path on local disk
     fn download_to_file<'p>(
         &self,
         py: Python<'p>,
@@ -374,6 +523,11 @@ impl MegaSession {
         })
     }
 
+    /// Upload a file resumable.
+    ///
+    /// Args:
+    ///     local_path: Path to local file
+    ///     remote_path: Destination folder on MEGA
     fn upload_resumable<'p>(
         &self,
         py: Python<'p>,
@@ -391,6 +545,13 @@ impl MegaSession {
         })
     }
 
+    /// Load a saved session from a file.
+    ///
+    /// Args:
+    ///     path: Path to saved session file
+    ///
+    /// Returns:
+    ///     MegaSession if loaded, None if file not found
     #[staticmethod]
     fn load(py: Python<'_>, path: String) -> PyResult<&PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -407,6 +568,15 @@ impl MegaSession {
     }
 }
 
+/// Start the registration process for a new MEGA account.
+///
+/// Args:
+///     email: Email address for the new account
+///     password: Password for the new account
+///     name: Display name for the account
+///
+/// Returns:
+///     MegaRegistrationState to save and use with verify_registration()
 #[pyfunction]
 fn register(py: Python<'_>, email: String, password: String, name: String) -> PyResult<&PyAny> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -417,6 +587,11 @@ fn register(py: Python<'_>, email: String, password: String, name: String) -> Py
     })
 }
 
+/// Complete registration using the signup key from email.
+///
+/// Args:
+///     state: MegaRegistrationState from register()
+///     signup_key: The confirmation key from the verification email
 #[pyfunction]
 fn verify_registration<'p>(
     py: Python<'p>,
@@ -432,6 +607,13 @@ fn verify_registration<'p>(
     })
 }
 
+/// Get info about a public file without downloading.
+///
+/// Args:
+///     url: MEGA public link (e.g., "https://mega.nz/file/...")
+///
+/// Returns:
+///     MegaPublicFile with name, size, and handle
 #[pyfunction]
 fn get_public_file_info(py: Python<'_>, url: String) -> PyResult<&PyAny> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -446,6 +628,11 @@ fn get_public_file_info(py: Python<'_>, url: String) -> PyResult<&PyAny> {
     })
 }
 
+/// Download a file from a public MEGA link.
+///
+/// Args:
+///     url: MEGA public link
+///     local_path: Destination path on local disk
 #[pyfunction]
 fn download_public_file(py: Python<'_>, url: String, local_path: String) -> PyResult<&PyAny> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -460,6 +647,9 @@ fn download_public_file(py: Python<'_>, url: String, local_path: String) -> PyRe
     })
 }
 
+/// A public folder for browsing shared folders without login.
+///
+/// Created via open_folder(). Use list() to browse, download() to get files.
 #[pyclass]
 struct MegaPublicFolder {
     inner: Arc<::megalib::public::PublicFolder>,
@@ -467,6 +657,7 @@ struct MegaPublicFolder {
 
 #[pymethods]
 impl MegaPublicFolder {
+    /// List files in a path within the public folder.
     fn list<'p>(&self, py: Python<'p>, path: String) -> PyResult<&'p PyAny> {
         let inner = self.inner.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
@@ -476,6 +667,7 @@ impl MegaPublicFolder {
         })
     }
 
+    /// Download a file from the public folder.
     fn download<'p>(
         &self,
         _py: Python<'p>,
@@ -491,16 +683,9 @@ impl MegaPublicFolder {
                     .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
                 let mut writer = std::io::BufWriter::new(file);
 
-                inner
-                    .download(&node, &mut writer)
-                    .await // Assuming download is async in PublicFolder too?
-                    // Checking public.rs... yes, download is likely async if it fetches chunks.
-                    // Wait, public.rs `download` signature:
-                    // pub async fn download(&self, node: &Node, writer: &mut W) -> Result<()>
-                    // So yes, it is async.
-                    .map_err(|e| {
-                        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-                    })?;
+                inner.download(&node, &mut writer).await.map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                })?;
                 Ok("Download complete")
             } else {
                 Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(
@@ -511,6 +696,13 @@ impl MegaPublicFolder {
     }
 }
 
+/// Open a public folder from a MEGA folder link.
+///
+/// Args:
+///     url: MEGA folder link (e.g., "https://mega.nz/folder/...")
+///
+/// Returns:
+///     MegaPublicFolder for browsing and downloading
 #[pyfunction]
 fn open_folder(py: Python<'_>, url: String) -> PyResult<&PyAny> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
