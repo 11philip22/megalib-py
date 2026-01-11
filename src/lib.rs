@@ -335,6 +335,62 @@ impl MegaSession {
         })
     }
 
+    fn change_password<'p>(&self, py: Python<'p>, new_password: String) -> PyResult<&'p PyAny> {
+        let inner = self.inner.clone();
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let mut session = inner.lock().await;
+            session
+                .change_password(&new_password)
+                .await
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            Ok(())
+        })
+    }
+
+    fn download_to_file<'p>(
+        &self,
+        py: Python<'p>,
+        remote_path: String,
+        local_path: String,
+    ) -> PyResult<&'p PyAny> {
+        let inner = self.inner.clone();
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let mut session = inner.lock().await;
+            let node = session.stat(&remote_path).cloned();
+
+            if let Some(node) = node {
+                session
+                    .download_to_file(&node, &local_path)
+                    .await
+                    .map_err(|e| {
+                        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
+                    })?;
+                Ok("Download complete")
+            } else {
+                Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(
+                    "File not found on Mega",
+                ))
+            }
+        })
+    }
+
+    fn upload_resumable<'p>(
+        &self,
+        py: Python<'p>,
+        local_path: String,
+        remote_path: String,
+    ) -> PyResult<&'p PyAny> {
+        let inner = self.inner.clone();
+        pyo3_asyncio::tokio::future_into_py(py, async move {
+            let mut session = inner.lock().await;
+            session
+                .upload_resumable(&local_path, &remote_path)
+                .await
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+            Ok("Upload complete")
+        })
+    }
+
     #[staticmethod]
     fn load(py: Python<'_>, path: String) -> PyResult<&PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {
