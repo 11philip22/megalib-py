@@ -1,5 +1,7 @@
 # megalib-py
 
+[![License: GPL v2](https://img.shields.io/badge/License-GPL_v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
+
 Python bindings for [**megalib**](https://crates.io/crates/megalib), a fast and robust Rust library for interacting with the Mega.nz API.
 
 ## Features
