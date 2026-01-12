@@ -1,6 +1,6 @@
 # megalib-py
 
-High-performance Python bindings for **megalib**, a fast and robust Rust library for interacting with the Mega.nz API.
+Python bindings for [**megalib**](https://crates.io/crates/megalib), a fast and robust Rust library for interacting with the Mega.nz API.
 
 ## Features
 
@@ -159,4 +159,4 @@ python example.py
 
 ## License
 
-This project is licensed under the GNU General Public License v2.0 (GPLv2) - see the [LICENSE](license) file for details.
+This project is licensed under the GNU General Public License v2.0 (GPLv2) - see the [license](license) file for details.
